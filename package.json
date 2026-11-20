@@ -1,0 +1,10 @@
+{
+  "name": "watersort",
+  "version": "1.0.0",
+  "description": "段階的な難易度つきのウォーターソートパズル（ブラウザで動く）",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

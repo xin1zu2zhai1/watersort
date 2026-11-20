@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ウォーターソート</title>
+<meta name="description" content="同じ色の水を1本の試験管にまとめるパズル。入門から極まで6段階・60レベル。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===== ホーム（レベル選択・カスタム・遊び方） ===== -->
+  <section class="screen home" id="screen-home">
+    <header class="home-head">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span style="--c:#E5383B"></span><span style="--c:#F9D93C"></span><span style="--c:#2563EB"></span>
+        </div>
+        <div>
+          <h1 class="brand-title">ウォーターソート</h1>
+          <p class="brand-sub">同じ色の水を、1本の試験管にまとめよう。</p>
+        </div>
+      </div>
+      <button class="btn btn-primary continue" id="btn-continue" type="button">
+        <span id="continue-label">はじめる</span>
+        <span class="continue-lv" id="continue-level">Lv.1</span>
+      </button>
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="メニュー">
+      <button class="tab" role="tab" id="tab-stage" aria-controls="panel-stage" aria-selected="true" type="button">ステージ</button>
+      <button class="tab" role="tab" id="tab-custom" aria-controls="panel-custom" aria-selected="false" type="button">カスタム</button>
+      <button class="tab" role="tab" id="tab-howto" aria-controls="panel-howto" aria-selected="false" type="button">遊び方・設定</button>
+    </div>
+
+    <div class="panel" id="panel-stage" role="tabpanel" aria-labelledby="tab-stage">
+      <p class="progress-line" id="progress-line"></p>
+      <div class="tiers" id="tiers"></div>
+    </div>
+
+    <div class="panel" id="panel-custom" role="tabpanel" aria-labelledby="tab-custom" hidden>
+      <form class="custom" id="custom-form">
+        <p class="panel-lead">色の数や試験管の大きさを自由に決めて遊べます。戻す・ヒントは無制限です。</p>
+        <div class="field">
+          <label for="c-colors">色の数</label>
+          <output id="c-colors-out" for="c-colors">6</output>
+          <input type="range" id="c-colors" min="2" max="12" step="1" value="6">
+        </div>
+        <div class="field">
+          <label for="c-capacity">1本に入る段数</label>
+          <output id="c-capacity-out" for="c-capacity">4</output>
+          <input type="range" id="c-capacity" min="3" max="6" step="1" value="4">
+        </div>
+        <div class="field">
+          <label for="c-empty">空の試験管</label>
+          <output id="c-empty-out" for="c-empty">2</output>
+          <input type="range" id="c-empty" min="1" max="3" step="1" value="2">
+        </div>
+        <label class="switch" for="c-hidden">
+          <input type="checkbox" id="c-hidden">
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">隠し色<small>一番上以外の色を隠す</small></span>
+        </label>
+        <p class="custom-summary" id="custom-summary"></p>
+        <p class="custom-note" id="custom-note" hidden>空きが1本で色が多いと、解ける配置が限られるため混ざり方が控えめになります。</p>
+        <button class="btn btn-primary" type="submit" id="btn-custom-play">この設定で遊ぶ</button>
+      </form>
+    </div>
+
+    <div class="panel" id="panel-howto" role="tabpanel" aria-labelledby="tab-howto" hidden>
+      <section class="howto">
+        <h2 class="section-title">遊び方</h2>
+        <ol class="rules">
+          <li>注ぎたい試験管をタップすると持ち上がります。</li>
+          <li>注ぐ先の試験管をタップします。注げるのは<b>空の試験管</b>か<b>一番上が同じ色の試験管</b>だけです。</li>
+          <li>一番上でつながっている同じ色はまとめて流れます。入りきらない分は元の試験管に残ります。</li>
+          <li>すべての試験管が1色ずつそろえばクリアです。そろった試験管にはコルク栓がします。</li>
+        </ol>
+        <h3 class="sub-title">★の数</h3>
+        <p class="note">目標手数以内なら★3。目標を超えると★−1、目標の1.5倍を超えるとさらに★−1、ヒントか試験管追加を使うと★−1（最低★1）。目標手数はソルバーが見つけた手順の長さです。</p>
+        <h3 class="sub-title">難易度の段階</h3>
+        <div class="table-scroll">
+          <table class="tier-table" id="tier-table">
+            <thead>
+              <tr><th scope="col">段階</th><th scope="col">レベル</th><th scope="col">色</th><th scope="col">空き</th><th scope="col">隠し色</th><th scope="col">戻す</th><th scope="col">ヒント</th><th scope="col">追加</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="note">すべての問題はソルバーで解けることを確認済みです。各段階の中では、素朴な手順で解ける確率が下がるように並べています。</p>
+        <h3 class="sub-title">キーボード</h3>
+        <p class="note keys"><kbd>Z</kbd> 戻す　<kbd>H</kbd> ヒント　<kbd>R</kbd> やり直す　<kbd>Esc</kbd> 選択を解除</p>
+      </section>
+
+      <section class="settings">
+        <h2 class="section-title">設定</h2>
+        <label class="switch" for="s-sound">
+          <input type="checkbox" id="s-sound" checked>
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">効果音</span>
+        </label>
+        <label class="switch" for="s-marks">
+          <input type="checkbox" id="s-marks">
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">色に記号を表示<small>色の区別がつきにくいときに</small></span>
+        </label>
+        <label class="switch" for="s-motion">
+          <input type="checkbox" id="s-motion" checked>
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">注ぐアニメーション</span>
+        </label>
+        <div class="reset-row">
+          <button class="btn btn-ghost" type="button" id="btn-reset">進行状況をリセット</button>
+          <span class="reset-confirm" id="reset-confirm" hidden>
+            すべての★と解放状況を消します。
+            <button class="btn btn-danger" type="button" id="btn-reset-yes">消す</button>
+            <button class="btn btn-ghost" type="button" id="btn-reset-no">やめる</button>
+          </span>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ===== ゲーム画面 ===== -->
+  <section class="screen game" id="screen-game" hidden>
+    <header class="game-bar">
+      <button class="icon-btn" id="btn-back" type="button" aria-label="メニューに戻る">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="game-title">
+        <span class="game-level" id="game-level">Lv.1</span>
+        <span class="tier-chip" id="game-tier">入門</span>
+      </div>
+      <div class="counter" aria-live="off">
+        <span class="counter-label">手数</span>
+        <span class="counter-moves" id="moves">0</span>
+        <span class="counter-par">目標 <span id="par">0</span></span>
+      </div>
+    </header>
+
+    <div class="board-wrap" id="board-wrap">
+      <div class="board" id="board" role="group" aria-label="試験管"></div>
+    </div>
+
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+
+    <nav class="toolbar" aria-label="操作">
+      <button class="tool" id="btn-undo" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4V2M4.5 7A8 8 0 1 1 4 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="tool-label">戻す</span>
+        <span class="tool-badge" id="undo-left">∞</span>
+      </button>
+      <button class="tool" id="btn-hint" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+        <span class="tool-label">ヒント</span>
+        <span class="tool-badge" id="hint-left">∞</span>
+      </button>
+      <button class="tool" id="btn-add" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8M9 3v13a3 3 0 0 0 6 0V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 15v6M16 18h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="tool-label">試験管</span>
+        <span class="tool-badge" id="add-left">1</span>
+      </button>
+      <button class="tool" id="btn-restart" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="tool-label">やり直す</span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- ===== クリア ===== -->
+  <div class="overlay" id="overlay-clear" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="clear-title">
+      <p class="sheet-eyebrow" id="clear-eyebrow"></p>
+      <h2 class="sheet-title" id="clear-title">クリア！</h2>
+      <div class="stars" id="clear-stars" role="img" aria-label="">
+        <span class="star"></span><span class="star"></span><span class="star"></span>
+      </div>
+      <dl class="result">
+        <div><dt>手数</dt><dd id="r-moves">0</dd></div>
+        <div><dt>目標</dt><dd id="r-par">0</dd></div>
+      </dl>
+      <ul class="deductions" id="r-deductions"></ul>
+      <p class="unlock" id="r-unlock" hidden></p>
+      <div class="sheet-actions">
+        <button class="btn btn-primary" type="button" id="btn-next">次のレベルへ</button>
+        <button class="btn btn-ghost" type="button" id="btn-replay">もう一度</button>
+        <button class="btn btn-ghost" type="button" id="btn-menu">メニュー</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/puzzle.js"></script>
+<script src="js/solver.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/game.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
