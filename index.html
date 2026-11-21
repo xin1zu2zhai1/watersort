@@ -79,6 +79,7 @@
           <li>注ぐ先の試験管をタップします。注げるのは<b>空の試験管</b>か<b>一番上が同じ色の試験管</b>だけです。</li>
           <li>一番上でつながっている同じ色はまとめて流れます。入りきらない分は元の試験管に残ります。</li>
           <li>すべての試験管が1色ずつそろえばクリアです。そろった試験管にはコルク栓がします。</li>
+          <li>動かせる手がなくなったり、どう注いでもクリアできない盤面になったりすると知らせます。まだ解ける所まで一気に戻せます。</li>
         </ol>
         <h3 class="sub-title">★の数</h3>
         <p class="note">目標手数以内なら★3。目標を超えると★−1、目標の1.5倍を超えるとさらに★−1、ヒントか試験管追加を使うと★−1（最低★1）。目標手数はソルバーが見つけた手順の長さです。</p>
@@ -107,6 +108,11 @@
           <input type="checkbox" id="s-marks">
           <span class="switch-track" aria-hidden="true"></span>
           <span class="switch-text">色に記号を表示<small>色の区別がつきにくいときに</small></span>
+        </label>
+        <label class="switch" for="s-stuck">
+          <input type="checkbox" id="s-stuck" checked>
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">解けなくなったら知らせる<small>オフでも、動かせる手がなくなったときは知らせます</small></span>
         </label>
         <label class="switch" for="s-motion">
           <input type="checkbox" id="s-motion" checked>
@@ -189,6 +195,23 @@
         <button class="btn btn-primary" type="button" id="btn-next">次のレベルへ</button>
         <button class="btn btn-ghost" type="button" id="btn-replay">もう一度</button>
         <button class="btn btn-ghost" type="button" id="btn-menu">メニュー</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 詰み ===== -->
+  <div class="overlay" id="overlay-stuck" hidden>
+    <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="stuck-title" aria-describedby="stuck-body">
+      <div class="stuck-mark" aria-hidden="true">
+        <span></span><span></span>
+      </div>
+      <h2 class="sheet-title sheet-title-sm" id="stuck-title">もう解けません</h2>
+      <p class="sheet-body" id="stuck-body"></p>
+      <p class="sheet-note" id="stuck-note" hidden></p>
+      <div class="sheet-actions">
+        <button class="btn btn-primary" type="button" id="btn-stuck-undo">戻す</button>
+        <button class="btn btn-ghost" type="button" id="btn-stuck-restart">やり直す</button>
+        <button class="btn btn-ghost" type="button" id="btn-stuck-close">閉じる</button>
       </div>
     </div>
   </div>

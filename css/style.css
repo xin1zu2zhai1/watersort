@@ -138,6 +138,18 @@ body {
   display: none !important;
 }
 
+/* 日本語を文節の切れ目で改行する（対応ブラウザのみ） */
+h1,
+h2,
+.status,
+.sheet-body,
+.sheet-note,
+.tier-summary,
+.note,
+.panel-lead {
+  word-break: auto-phrase;
+}
+
 button {
   font: inherit;
   color: inherit;
@@ -1244,6 +1256,65 @@ kbd {
 
 .sheet-actions .btn-primary {
   grid-column: 1 / -1;
+}
+
+.sheet-actions.is-stacked {
+  grid-template-columns: 1fr;
+}
+
+/* ---------- 詰み ---------- */
+
+.sheet-title-sm {
+  font-size: 28px;
+}
+
+.sheet-body {
+  margin: 0 0 6px;
+  font-size: 15px;
+  text-wrap: balance;
+}
+
+.sheet-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-wrap: balance;
+}
+
+.sheet-body + .sheet-actions {
+  margin-top: 14px;
+}
+
+/* 栓のできない試験管 2 本（行き場のない水） */
+.stuck-mark {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 8px;
+  height: 52px;
+  margin-bottom: 6px;
+}
+
+.stuck-mark span {
+  width: 18px;
+  height: 46px;
+  border: 2.5px solid var(--glass-edge);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+  background:
+    linear-gradient(to top, #e5383b 0 25%, #2563eb 25% 50%, #e5383b 50% 75%, #2563eb 75% 100%);
+}
+
+.stuck-mark span:last-child {
+  background:
+    linear-gradient(to top, #2563eb 0 25%, #e5383b 25% 50%, #2563eb 50% 75%, #e5383b 75% 100%);
+  transform: rotate(8deg);
+  transform-origin: bottom;
+}
+
+.sheet-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* ---------- アニメーション ---------- */

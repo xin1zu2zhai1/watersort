@@ -37,6 +37,8 @@
       this.extraUsed = 0;
       // 各試験管の「底から何段が隠れているか」。隠れているのは常に底側の連続した段。
       this.hiddenCounts = this.tubes.map((t) => (this.puzzle.hidden ? Math.max(0, t.length - 1) : 0));
+      // verdicts[i]: i 手目の盤面がまだ解けるか（'solvable' | 'unsolvable' | 'unknown'）。必要になったら調べる。
+      this.verdicts = [];
     }
 
     get moves() {
@@ -59,8 +61,12 @@
     pour(from, to) {
       const res = Puzzle.applyPour(this.tubes, this.capacity, from, to);
       if (!res) return null;
+      const prevVerdict = this.verdicts[this.history.length];
       this.tubes = res.tubes;
       this.history.push({ from, to, amount: res.amount });
+      this.verdicts.length = this.history.length;
+      // 解けない盤面からどう注いでも、解けない盤面にしかならない
+      if (prevVerdict === 'unsolvable') this.verdicts[this.history.length] = 'unsolvable';
       this.reveal(from);
       return {
         from,
@@ -92,7 +98,15 @@
       next[last.from] = dst;
       this.tubes = next;
       this.undoLeft--;
+      this.verdicts.length = this.history.length + 1;
       return last;
+    }
+
+    /** n 手まとめて戻す。実際に戻した手数を返す。 */
+    undoMany(n) {
+      let count = 0;
+      while (count < n && this.undo()) count++;
+      return count;
     }
 
     canAddTube() {
@@ -104,6 +118,8 @@
       if (!this.canAddTube()) return false;
       this.tubes = this.tubes.concat([[]]);
       this.hiddenCounts.push(0);
+      // 空きが増えると解けなかった盤面も解けるかもしれないので判定し直す（解けた盤面は解けたまま）
+      this.verdicts = this.verdicts.map((v) => (v === 'solvable' ? v : undefined));
       this.extraLeft--;
       this.extraUsed++;
       return true;
@@ -126,8 +142,64 @@
         this.hintsUsed++;
         return { move: res.moves[0] };
       }
-      if (res.exhausted) return { stuck: true };
+      if (res.exhausted) {
+        this.verdicts[this.history.length] = 'unsolvable';
+        return { stuck: true };
+      }
       return { unknown: true };
+    }
+
+    /** i 手目の盤面を、最初の盤面から手順を再生して作る。 */
+    stateAt(i) {
+      const extra = this.tubes.length - this.puzzle.tubes.length;
+      let tubes = Puzzle.cloneTubes(this.puzzle.tubes);
+      for (let k = 0; k < extra; k++) tubes.push([]);
+      for (let k = 0; k < i; k++) tubes = Puzzle.applyPour(tubes, this.capacity, this.history[k].from, this.history[k].to).tubes;
+      return tubes;
+    }
+
+    verdictAt(i, maxNodes) {
+      if (this.verdicts[i]) return this.verdicts[i];
+      const tubes = i === this.history.length ? this.tubes : this.stateAt(i);
+      let v;
+      if (Puzzle.isSolved(tubes, this.capacity)) v = 'solvable';
+      else if (!Puzzle.hasUsefulMove(tubes, this.capacity)) v = 'unsolvable';
+      else if (i > 0 && this.verdicts[i - 1] === 'unsolvable') v = 'unsolvable';
+      else {
+        const res = Solver.solve(tubes, this.capacity, { weight: 1.5, maxNodes: maxNodes || 20000 });
+        v = res.moves ? 'solvable' : res.exhausted ? 'unsolvable' : 'unknown';
+      }
+      this.verdicts[i] = v;
+      return v;
+    }
+
+    /** 今の盤面がまだ解けるか。'solvable' | 'unsolvable' | 'unknown'（探索が上限に達した）。 */
+    checkSolvable(maxNodes) {
+      return this.verdictAt(this.history.length, maxNodes);
+    }
+
+    /**
+     * まだ解ける盤面まで何手戻せばよいか（今の盤面が解けない前提）。
+     * 手順に沿うと「解ける盤面が続いたあと、解けない盤面が続く」ので二分探索で境目を探す。
+     * 判定できなかった盤面は解けない側として扱う（戻りすぎることはあっても、解けない所には戻さない）。
+     * 最初の盤面まで戻る必要があるときは手数そのもの（= やり直し）を返す。
+     */
+    stepsToSolvable(maxNodes) {
+      const n = this.history.length;
+      let lo = 0;
+      for (let i = n - 1; i > 0; i--) {
+        if (this.verdicts[i] === 'solvable') {
+          lo = i;
+          break;
+        }
+      }
+      let hi = n;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (this.verdictAt(mid, maxNodes) === 'solvable') lo = mid;
+        else hi = mid;
+      }
+      return n - lo;
     }
 
     isSolved() {
@@ -171,6 +243,7 @@
       this.hintsUsed = snap.hintsUsed;
       this.extraUsed = snap.extraUsed;
       this.hiddenCounts = snap.hiddenCounts.slice();
+      this.verdicts = [];
     }
   }
 

@@ -79,3 +79,82 @@ test('スナップショットから復元できる', () => {
   assert.equal(h.undoLeft, Infinity);
   assert.equal(h.extraLeft, 0);
 });
+
+// ---- 詰みの判定 ----
+const P = require('../js/puzzle.js');
+const S = require('../js/solver.js');
+
+/** 盤面から「指すと解けなくなる手」を探す。 */
+function findBadMove(tubes, capacity) {
+  for (const [a, b] of P.legalMoves(tubes, capacity)) {
+    const next = P.applyPour(tubes, capacity, a, b).tubes;
+    if (P.isSolved(next, capacity)) continue;
+    const res = S.solve(next, capacity, { maxNodes: 200000 });
+    if (!res.moves && res.exhausted) return [a, b];
+  }
+  return null;
+}
+
+test('解けなくなった手を検出し、何手戻せばよいか分かる', () => {
+  const pz = L.generatePuzzle(L.levelConfig(56)); // 空き 1 本の「極」
+  const g = new Game(pz, { undo: Infinity, hints: 0, extraTubes: 0 });
+  assert.equal(g.checkSolvable(), 'solvable');
+
+  // 模範解答を何手か進め（解ける）→ 解けなくなる手 → さらに動かせるだけ動かす
+  let bad = null;
+  let good = 0;
+  for (let k = 1; k < pz.solution.length && !bad; k++) {
+    g.pour(pz.solution[k - 1][0], pz.solution[k - 1][1]);
+    good = k;
+    bad = findBadMove(g.tubes, g.capacity);
+  }
+  assert.ok(bad, 'テスト用の悪手が見つかる');
+  assert.equal(g.checkSolvable(), 'solvable');
+  g.pour(bad[0], bad[1]);
+  assert.equal(g.checkSolvable(), 'unsolvable');
+  assert.equal(g.stepsToSolvable(), 1);
+
+  let extra = 0;
+  for (let k = 0; k < 2; k++) {
+    const m = P.legalMoves(g.tubes, g.capacity).find(([a, b]) => !g.isComplete(a) && !(P.topRun(g.tubes[a]) === g.tubes[a].length && !g.tubes[b].length));
+    if (!m) break;
+    g.pour(m[0], m[1]);
+    extra++;
+    assert.equal(g.checkSolvable(), 'unsolvable', '解けない盤面の先も解けない');
+  }
+  assert.equal(g.stepsToSolvable(), 1 + extra);
+
+  assert.equal(g.undoMany(1 + extra), 1 + extra);
+  assert.equal(g.moves, good);
+  assert.equal(g.checkSolvable(), 'solvable');
+});
+
+test('戻した後に別の手を指すと、古い判定は使わない', () => {
+  const pz = L.generatePuzzle(L.levelConfig(56));
+  const g = new Game(pz, { undo: Infinity, hints: 0, extraTubes: 0 });
+  const bad = findBadMove(g.tubes, g.capacity);
+  g.pour(bad[0], bad[1]);
+  assert.equal(g.checkSolvable(), 'unsolvable');
+  g.undo();
+  g.pour(pz.solution[0][0], pz.solution[0][1]);
+  assert.equal(g.checkSolvable(), 'solvable');
+});
+
+test('手詰まり（動かせる手が無い）も解けない盤面として扱う', () => {
+  const g = new Game({ tubes: [[0, 1, 0, 1], [1, 0, 1, 0]], capacity: 4, hidden: false, par: 1 }, { undo: 0, hints: 0, extraTubes: 0 });
+  assert.equal(g.isStuck(), true);
+  assert.equal(g.checkSolvable(), 'unsolvable');
+});
+
+test('試験管を追加すると解けない判定をやり直す', () => {
+  const pz = L.generatePuzzle(L.levelConfig(56));
+  const g = new Game(pz, { undo: Infinity, hints: 0, extraTubes: 1 });
+  const bad = findBadMove(g.tubes, g.capacity);
+  g.pour(bad[0], bad[1]);
+  assert.equal(g.checkSolvable(), 'unsolvable');
+  g.addTube();
+  assert.notEqual(g.verdicts[g.moves], 'unsolvable', '古い判定は消える');
+  const v = g.checkSolvable();
+  const truth = S.solve(g.tubes, g.capacity, { maxNodes: 200000 });
+  assert.equal(v, truth.moves ? 'solvable' : 'unsolvable');
+});

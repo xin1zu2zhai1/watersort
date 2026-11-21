@@ -35,7 +35,7 @@
     return {
       stars: {},
       last: 1,
-      settings: { sound: true, marks: false, motion: true },
+      settings: { sound: true, marks: false, motion: true, stuckAlert: true },
       custom: { colors: 6, capacity: 4, empty: 2, hidden: false },
     };
   }
@@ -166,6 +166,7 @@
     $('s-sound').checked = store.settings.sound;
     $('s-marks').checked = store.settings.marks;
     $('s-motion').checked = store.settings.motion;
+    $('s-stuck').checked = store.settings.stuckAlert;
   }
 
   // ---------------------------------------------------------------- 状態
@@ -182,6 +183,8 @@
     hint: -1,
     busy: false,
     needsLayout: false,
+    stuckShown: false, // 今の「解けない」状態をすでに知らせたか
+    stuckSteps: 0,
   };
   const puzzleCache = new Map();
   let slotEls = [];
@@ -366,7 +369,9 @@
     S.selected = -1;
     S.hint = -1;
     S.busy = false;
+    S.stuckShown = false;
     $('overlay-clear').hidden = true;
+    $('overlay-stuck').hidden = true;
     showScreen('game');
     renderGameHeader();
     buildBoard();
@@ -699,7 +704,7 @@
     slot.classList.remove('is-pouring');
   }
 
-  function afterMove(res) {
+  async function afterMove(res) {
     const game = S.game;
     updateHud();
     if (res && res.completed) Sound.cork();
@@ -707,11 +712,94 @@
       onSolved();
       return;
     }
-    if (game.isStuck()) {
-      setStatus(game.canUndo() ? '手詰まりです。「戻す」か「やり直す」で続けましょう。' : '手詰まりです。「やり直す」で最初から挑戦できます。', true);
+    const kind = stuckKind();
+    if (!kind) {
+      S.stuckShown = false;
+      setStatus('');
+      return;
+    }
+    setStatus(stuckStatusText(kind), true);
+    // 「解けない」は一度だけ知らせる（閉じて続けた場合は表示だけ）。手詰まりは毎回知らせる。
+    if (kind === 'nomoves' || !S.stuckShown) {
+      S.busy = true;
+      await wait(motionOn() ? 250 : 0); // 最後の一手の結果を見せてから
+      S.busy = false;
+      if (S.screen === 'game' && S.game === game) showStuck(kind);
+    }
+  }
+
+  // ---------------------------------------------------------------- 詰み
+
+  /** 'nomoves'（動かせる手が無い）| 'unsolvable'（手はあるが解けない）| null */
+  function stuckKind() {
+    const game = S.game;
+    if (game.isSolved()) return null;
+    if (game.isStuck()) return 'nomoves';
+    if (!store.settings.stuckAlert) return null;
+    return game.checkSolvable() === 'unsolvable' ? 'unsolvable' : null;
+  }
+
+  function stuckStatusText(kind) {
+    return kind === 'nomoves' ? '動かせる手がありません。' : 'この盤面からはもう解けません。';
+  }
+
+  /** 戻す・試験管追加・設定変更の後に、ステータス表示だけ更新する（ポップアップは出さない）。 */
+  function refreshStuckStatus() {
+    const kind = stuckKind();
+    if (kind) {
+      setStatus(stuckStatusText(kind), true);
     } else {
+      S.stuckShown = false;
       setStatus('');
     }
+  }
+
+  function showStuck(kind) {
+    const game = S.game;
+    select(-1);
+    clearHint();
+    S.stuckShown = true;
+    const steps = game.stepsToSolvable();
+    const canGoBack = steps > 0 && game.undoLeft >= steps;
+    S.stuckSteps = steps;
+
+    $('stuck-title').textContent = kind === 'nomoves' ? '手詰まり' : 'もう解けません';
+    $('stuck-body').textContent = kind === 'nomoves' ? '動かせる手がなくなりました。' : 'この盤面からは、どう注いでもクリアできません。';
+    let note;
+    if (steps === 1) note = '1手戻せば、まだ解ける盤面です。';
+    else if (steps >= game.moves) note = `最初の盤面（${steps}手前）まで戻る必要があります。`;
+    else note = `${steps}手戻せば、まだ解ける盤面に戻れます。`;
+    if (!canGoBack && steps > 0) note += `「戻す」の残りが足りないので、やり直しましょう（残り${fmt(game.undoLeft)}回）。`;
+    $('stuck-note').textContent = note;
+    $('stuck-note').hidden = false;
+
+    const undoBtn = $('btn-stuck-undo');
+    const restartBtn = $('btn-stuck-restart');
+    undoBtn.hidden = !canGoBack;
+    undoBtn.textContent = steps === 1 ? '1手戻す' : `${steps}手戻す`;
+    restartBtn.className = 'btn ' + (canGoBack ? 'btn-ghost' : 'btn-primary');
+    $('overlay-stuck').querySelector('.sheet-actions').classList.toggle('is-stacked', !canGoBack);
+
+    S.stuckReturnFocus = document.activeElement;
+    $('overlay-stuck').hidden = false;
+    Sound.error();
+    (canGoBack ? undoBtn : restartBtn).focus();
+  }
+
+  function closeStuck() {
+    $('overlay-stuck').hidden = true;
+    const back = S.stuckReturnFocus;
+    if (back && document.contains(back)) back.focus();
+  }
+
+  function onStuckUndo() {
+    const game = S.game;
+    closeStuck();
+    game.undoMany(S.stuckSteps);
+    renderAllTubes();
+    updateHud();
+    refreshStuckStatus();
+    Sound.undo();
   }
 
   function onUndo() {
@@ -723,7 +811,7 @@
     renderTube(last.from);
     renderTube(last.to);
     updateHud();
-    setStatus('');
+    refreshStuckStatus();
     Sound.undo();
   }
 
@@ -734,8 +822,8 @@
     const h = game.hint();
     if (!h) return;
     if (h.stuck) {
-      setStatus('この盤面からは解けません。「戻す」か「やり直す」を使いましょう。', true);
-      Sound.error();
+      setStatus(stuckStatusText('unsolvable'), true);
+      showStuck('unsolvable');
       return;
     }
     if (h.unknown) {
@@ -756,7 +844,8 @@
     clearHint();
     buildBoard();
     updateHud();
-    setStatus('空の試験管を追加しました。★が1つ減ります。');
+    refreshStuckStatus();
+    if (!stuckKind()) setStatus('空の試験管を追加しました。★が1つ減ります。');
   }
 
   function onRestart() {
@@ -764,6 +853,8 @@
     S.game.reset();
     S.selected = -1;
     S.hint = -1;
+    S.stuckShown = false;
+    $('overlay-stuck').hidden = true;
     buildBoard();
     updateHud();
     setStatus('最初からやり直します。');
@@ -917,6 +1008,11 @@
       saveStore();
       applySettings();
     });
+    $('s-stuck').addEventListener('change', (e) => {
+      store.settings.stuckAlert = e.target.checked;
+      saveStore();
+      if (S.screen === 'game' && S.game && !S.game.isSolved()) refreshStuckStatus();
+    });
     if (reduceMotion.addEventListener) reduceMotion.addEventListener('change', applySettings);
 
     $('btn-reset').addEventListener('click', () => {
@@ -947,6 +1043,10 @@
     $('btn-add').addEventListener('click', onAddTube);
     $('btn-restart').addEventListener('click', onRestart);
 
+    $('btn-stuck-undo').addEventListener('click', onStuckUndo);
+    $('btn-stuck-restart').addEventListener('click', onRestart);
+    $('btn-stuck-close').addEventListener('click', closeStuck);
+
     $('btn-next').addEventListener('click', () => {
       if (S.mode === 'stage') startStage(S.level + 1);
       else startCustom();
@@ -963,6 +1063,10 @@
 
     document.addEventListener('keydown', (e) => {
       if (S.screen !== 'game' || !$('overlay-clear').hidden) return;
+      if (!$('overlay-stuck').hidden) {
+        if (e.key === 'Escape') closeStuck();
+        return;
+      }
       if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
       const key = e.key.toLowerCase();
       if (key === 'z') {
